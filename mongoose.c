@@ -11347,37 +11347,48 @@ int mg_strcasecmp(const struct mg_str str1, const struct mg_str str2) {
 }
 
 bool mg_match(struct mg_str s, struct mg_str p, struct mg_str *caps) {
-  size_t i = 0, j = 0, ni = 0, nj = 0;
-  if (caps) caps->buf = NULL, caps->len = 0;
-  while (i < p.len || j < s.len) {
-    if (i < p.len && j < s.len &&
-        (p.buf[i] == '?' ||
-         (p.buf[i] != '*' && p.buf[i] != '#' && s.buf[j] == p.buf[i]))) {
-      if (caps == NULL) {
-      } else if (p.buf[i] == '?') {
-        caps->buf = &s.buf[j], caps->len = 1;     // Finalize `?` cap
-        caps++, caps->buf = NULL, caps->len = 0;  // Init next cap
-      } else if (caps->buf != NULL && caps->len == 0) {
-        caps->len = (size_t) (&s.buf[j] - caps->buf);  // Finalize current cap
-        caps++, caps->len = 0, caps->buf = NULL;       // Init next cap
-      }
-      i++, j++;
-    } else if (i < p.len && (p.buf[i] == '*' || p.buf[i] == '#')) {
-      if (caps && !caps->buf) caps->len = 0, caps->buf = &s.buf[j];  // Init cap
-      ni = i++, nj = j + 1;
-    } else if (nj > 0 && nj <= s.len && ((ni < p.len && p.buf[ni] == '#') || s.buf[j] != '/')) {
-      i = ni, j = nj;
-      if (caps && caps->buf == NULL && caps->len == 0) {
-        caps--, caps->len = 0;  // Restart previous cap
-      }
-    } else {
-      return false;
+  size_t si = 0, pi = 0, l;
+  while(si < s.len && pi < p.len) {
+    switch (p.buf[pi]) {
+      case '?':
+        if (caps) {
+          caps->len = 1;
+          caps->buf = s.buf + si;
+          caps++;
+        }
+        si++;
+        break;
+      case '*':
+        l = 0;
+        while ((si+l) < s.len && s.buf[si+l] != '/') {
+          l++;
+        }
+        if (caps) {
+          caps->len = l;
+          caps->buf = s.buf + si;
+          caps++;
+        }
+        si += l;
+        break;
+      case '#':
+        if (caps) {
+          caps->len = s.len - si;
+          caps->buf = s.buf + si;
+          caps++;
+        }
+        si = s.len;
+        break;
+      default: 
+        if (s.buf[si] != p.buf[pi]) {
+          return false;
+        } else {
+          si++;
+        }
     }
+    pi++;
   }
-  if (caps && caps->buf && caps->len == 0) {
-    caps->len = (size_t) (&s.buf[j] - caps->buf);
-  }
-  return true;
+
+  return (si == s.len && pi == p.len);
 }
 
 bool mg_span(struct mg_str s, struct mg_str *a, struct mg_str *b, char sep) {
